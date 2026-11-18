@@ -1,0 +1,24 @@
+@code {
+    [Parameter, EditorRequired] public double Value { get; set; }
+    [Parameter] public int Votes { get; set; }
+    [Parameter] public bool ShowCount { get; set; } = true;
+
+    private int Percent => (int)Math.Round(Math.Clamp(Value / 5d, 0, 1) * 100);
+
+    private string Label =>
+        Votes > 0
+            ? $"{Value:0.0} out of 5 from {Votes} votes"
+            : "No votes yet";
+}
+
+<span class="rating" title="@Label">
+    <span class="stars" role="img" aria-label="@Label">
+        <span class="stars-base" aria-hidden="true">★★★★★</span>
+        <span class="stars-fill" style="width:@(Percent)%" aria-hidden="true">★★★★★</span>
+    </span>
+    <span class="rating-value">@Value.ToString("0.0")</span>
+    @if (ShowCount && Votes > 0)
+    {
+        <span class="rating-count">(@Text.Number(Votes))</span>
+    }
+</span>

@@ -1,0 +1,42 @@
+@using Microsoft.Extensions.Options
+@inject IOptions<GalleryOptions> Options
+
+<header class="site-header">
+    <div class="container header-inner">
+        <a class="brand" href="/" aria-label="QM Gallery home">
+            <span class="brand-mark" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none">
+                    <rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor" opacity="0.1"/>
+                    <path d="M9 10.5h14M9 16h14M9 21.5h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                    <circle cx="22" cy="21.5" r="2.2" fill="currentColor"/>
+                </svg>
+            </span>
+            <span class="brand-text">
+                <strong>QM Gallery</strong>
+                <small>Space Engineers plugins</small>
+            </span>
+        </a>
+
+        <nav class="main-nav" aria-label="Main navigation">
+            <NavLink href="/plugins" Match="NavLinkMatch.Prefix">Plugins</NavLink>
+            <NavLink href="/mods" Match="NavLinkMatch.Prefix">Mods</NavLink>
+            <NavLink href="/authors" Match="NavLinkMatch.Prefix">Authors</NavLink>
+            <NavLink href="/about" Match="NavLinkMatch.Prefix">About</NavLink>
+        </nav>
+
+        <div class="header-actions">
+            <a class="icon-button"
+               href="@Options.Value.DiscordUrl"
+               target="_blank"
+               rel="noopener noreferrer"
+               aria-label="Join the community Discord"
+               title="Join the community Discord">
+                <Icon Name="discord"/>
+            </a>
+            <button class="icon-button theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme">
+                <span class="theme-sun"><Icon Name="sun"/></span>
+                <span class="theme-moon"><Icon Name="moon"/></span>
+            </button>
+        </div>
+    </div>
+</header>

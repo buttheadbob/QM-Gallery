@@ -1,0 +1,70 @@
+﻿@using Microsoft.AspNetCore.Http
+@inject IHttpContextAccessor HttpContextAccessor
+
+@{
+    string initialTheme = "light";
+    string? themeCookie = HttpContextAccessor.HttpContext?.Request.Cookies["qm-theme"];
+    if (themeCookie is "dark" or "light")
+        initialTheme = themeCookie;
+}
+
+<!DOCTYPE html>
+<html lang="en" data-theme="@initialTheme">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <BasePath/>
+    <ResourcePreloader/>
+
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('qm-theme');
+                var cookieMatch = document.cookie.match(/(?:^|;\s*)qm-theme=(light|dark)/);
+                var cookieTheme = cookieMatch ? cookieMatch[1] : null;
+                var requested = new URLSearchParams(window.location.search).get('theme');
+                var theme = requested === 'light' || requested === 'dark'
+                    ? requested
+                    : (stored === 'light' || stored === 'dark'
+                        ? stored
+                        : (cookieTheme === 'light' || cookieTheme === 'dark'
+                            ? cookieTheme
+                            : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')));
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('qm-theme', theme);
+                document.cookie = 'qm-theme=' + theme + '; path=/; max-age=31536000; samesite=lax';
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+    </script>
+
+    <link rel="stylesheet" href="@Assets["app.css"]"/>
+    <link rel="stylesheet" href="@Assets["QM_Gallery.styles.css"]"/>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+    <link rel="icon" type="image/png" href="favicon.png"/>
+    <link rel="preload" href="fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin/>
+    <link rel="preload" href="fonts/geist-mono-latin.woff2" as="font" type="font/woff2" crossorigin/>
+
+    <meta name="theme-color" content="#fbfbfc" media="(prefers-color-scheme: light)"/>
+    <meta name="theme-color" content="#0b0c0f" media="(prefers-color-scheme: dark)"/>
+    <meta name="description" content="Browse plugins for Pulsar, Magnetar and Quasar — Space Engineers client and dedicated-server plugins, with ratings, READMEs and pinned versions."/>
+
+    <ImportMap/>
+    <HeadOutlet/>
+</head>
+
+<body>
+<Routes/>
+<ReconnectModal/>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Something went wrong. <a href="." class="reload">Reload the page</a>
+    <button type="button" class="dismiss" aria-label="Dismiss">×</button>
+</div>
+
+<script src="@Assets["_framework/blazor.web.js"]"></script>
+<script type="module" src="@Assets["js/gallery.js"]"></script>
+</body>
+
+</html>

@@ -1,0 +1,20 @@
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public string? LinkHref { get; set; }
+    [Parameter] public string? LinkText { get; set; }
+}
+
+<div class="section-head">
+    <div>
+        <h2>@Title</h2>
+        @if (!string.IsNullOrWhiteSpace(Subtitle))
+        {
+            <p>@Subtitle</p>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(LinkHref))
+    {
+        <a class="section-link" href="@LinkHref">@LinkText <Icon Name="arrow-right" Size="14"/></a>
+    }
+</div>

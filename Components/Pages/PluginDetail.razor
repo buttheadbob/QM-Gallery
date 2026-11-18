@@ -1,0 +1,487 @@
+@page "/plugins/{Slug}"
+@using System.Text.Json
+@using System.Xml.Linq
+@using Microsoft.Extensions.Options
+@inject GalleryStore Store
+@inject ReadmeService Readmes
+@inject IOptions<GalleryOptions> Options
+@inject ILogger<PluginDetail> Logger
+
+@if (_loading)
+{
+    <div class="container">
+        <div class="detail-header">
+            <div class="skeleton" style="width: 160px; height: 13px;"></div>
+            <div class="skeleton" style="width: min(520px, 80%); height: 40px; margin-top: 20px;"></div>
+            <div class="skeleton" style="width: min(680px, 90%); height: 16px; margin-top: 16px;"></div>
+        </div>
+        <div class="detail-layout">
+            <div>
+                <div class="skeleton" style="width: 100%; height: 320px; border-radius: 12px;"></div>
+            </div>
+            <div class="detail-sidebar">
+                <div class="skeleton" style="width: 100%; height: 220px; border-radius: 12px;"></div>
+            </div>
+        </div>
+    </div>
+}
+else if (_plugin is null)
+{
+    <div class="container">
+        <EmptyState Icon="search"
+                    Title="Plugin not found"
+                    Message="This plugin may have been removed from its hub, or the link is incorrect."
+                    Style="margin-top: 64px;">
+            <a class="btn btn-primary" href="/plugins">Browse all plugins</a>
+        </EmptyState>
+    </div>
+}
+else
+{
+    PluginGroup plugin = _plugin;
+    List<PluginEntry> entries = plugin.Entries;
+    PluginEntry primary = entries
+        .OrderBy(e => e.HubKey == "pulsar" ? 0 : e.HubKey == "magnetar" ? 1 : 2)
+        .First();
+    string? license = plugin.Repo?.License is { Length: > 0 } value && value != "NOASSERTION" ? value : null;
+    List<(string Id, PluginGroup? Group)> dependencies = plugin.DependencyIds
+        .Select(id => (id, Store.View.ById.GetValueOrDefault(id)))
+        .ToList();
+    List<(string Id, PluginGroup? Group)> companions = plugin.CompanionIds
+        .Select(id => (id, Store.View.ById.GetValueOrDefault(id)))
+        .ToList();
+    List<PluginGroup> related = Store.View.Plugins
+        .Where(p => !p.IsHidden && p.Slug != plugin.Slug
+            && string.Equals(p.Author, plugin.Author, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(p => p.PulsarPlayers)
+        .Take(3)
+        .ToList();
+
+    <PageTitle>@plugin.Name by @plugin.Author · QM Gallery</PageTitle>
+    <HeadContent>
+        <meta name="description" content="@Text.Truncate(string.IsNullOrWhiteSpace(plugin.Tooltip) ? plugin.Description : plugin.Tooltip, 160)"/>
+        <meta property="og:title" content="@plugin.Name — QM Gallery"/>
+        <meta property="og:description" content="@Text.Truncate(plugin.Tooltip, 180)"/>
+        <meta property="og:type" content="website"/>
+        <script type="application/ld+json">@((MarkupString)JsonLd(plugin))</script>
+    </HeadContent>
+
+    <header class="detail-header" data-page-title="@($"{plugin.Name} by {plugin.Author}")">
+        <div class="container">
+            <a class="back-link" href="/plugins"><Icon Name="chevron-left" Size="14"/> All plugins</a>
+
+            <div class="detail-hero">
+                <Avatar Name="@plugin.Author" Seed="@(plugin.RepoOwner ?? plugin.Author)" Owner="@plugin.RepoOwner" Size="lg"/>
+
+                <div class="detail-heading">
+                    <h1>@plugin.Name</h1>
+                    <div class="detail-sub">
+                        <span>by @plugin.Author</span>
+                        @foreach (string system in plugin.Systems)
+                        {
+                            <SystemBadge Key="@system"/>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(plugin.Version))
+                        {
+                            <span class="badge">v@(plugin.Version)</span>
+                        }
+                        @if (plugin.Recommended)
+                        {
+                            <span class="badge badge-accent">Recommended</span>
+                        }
+                        @if (plugin.IsDependency)
+                        {
+                            <span class="badge">Dependency</span>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(plugin.Tooltip))
+                    {
+                        <p class="detail-summary">@plugin.Tooltip</p>
+                    }
+
+                    <div class="detail-actions">
+                        @if (plugin.RepoKey is not null)
+                        {
+                            <a class="btn btn-primary" href="https://github.com/@plugin.RepoKey" target="_blank" rel="noopener noreferrer">
+                                <Icon Name="github" Size="16"/> View on GitHub
+                            </a>
+                        }
+                        @if (plugin.CommitUrl is not null)
+                        {
+                            <a class="btn btn-secondary" href="@plugin.CommitUrl" target="_blank" rel="noopener noreferrer">
+                                <Icon Name="commit" Size="16"/> Pinned version
+                            </a>
+                        }
+                        @if (plugin.Systems.Count > 0)
+                        {
+                            <button type="button" class="btn btn-secondary" data-scroll-to="install">
+                                <Icon Name="package" Size="16"/> Install
+                            </button>
+                        }
+                        <a class="btn btn-ghost" href="@Options.Value.DiscordUrl" target="_blank" rel="noopener noreferrer">
+                            <Icon Name="discord" Size="16"/> Get help
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="detail-layout">
+            <div class="detail-main">
+                <section class="detail-section">
+                    <h2>About</h2>
+                    @if (_readme is not null)
+                    {
+                        <div class="prose">@((MarkupString)_readme.Html)</div>
+                    }
+                    else if (plugin.RepoKey is not null)
+                    {
+                        <div class="readme-empty">
+                            <p>This repository doesn't publish a README the gallery can display.</p>
+                            <p style="margin-top: 8px;">
+                                <a href="https://github.com/@plugin.RepoKey" target="_blank" rel="noopener noreferrer">Read the source on GitHub</a>
+                            </p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="prose">
+                            <p>@plugin.Description</p>
+                        </div>
+                    }
+                </section>
+
+                @if (plugin.Systems.Count > 0)
+                {
+                    <section class="detail-section" id="install">
+                        <h2>Install</h2>
+                        <ol class="install-steps">
+                            @foreach (string system in plugin.Systems)
+                            {
+                                @if (system == "pulsar")
+                                {
+                                    <li class="install-step">
+                                        <div>
+                                            <strong>Pulsar:</strong> open the Pulsar launcher, enable <em>@plugin.Name</em> in the
+                                            plugin list and start Space Engineers. Pulsar downloads the pinned commit and compiles it
+                                            on launch — there is nothing to install manually.
+                                        </div>
+                                    </li>
+                                }
+                                else if (system == "magnetar")
+                                {
+                                    <li class="install-step">
+                                        <div>
+                                            <strong>Magnetar:</strong> enable <em>@plugin.Name</em> in your server's plugin list,
+                                            or from the Plugins page of a Quasar-managed server, then restart the server.
+                                            Magnetar compiles the pinned commit at startup.
+                                        </div>
+                                    </li>
+                                }
+                                else if (system == "quasar")
+                                {
+                                    <li class="install-step">
+                                        <div>
+                                            <strong>Quasar:</strong> open <em>UI Plugins</em>, refresh the catalogue, install
+                                            <em>@plugin.Name</em>, then restart Quasar.
+                                            @if (!string.IsNullOrWhiteSpace(primary.QuasarVersion))
+                                            {
+                                                <span>Requires Quasar <span class="mono">@primary.QuasarVersion</span> or newer.</span>
+                                            }
+                                            Companion Magnetar plugins are installed on the managed servers.
+                                        </div>
+                                    </li>
+                                }
+                            }
+                        </ol>
+                    </section>
+                }
+
+                @if (dependencies.Count > 0 || companions.Count > 0)
+                {
+                    <section class="detail-section">
+                        <h2>Dependencies</h2>
+                        <p class="muted" style="font-size: 13.5px; margin-bottom: 12px;">
+                            These plugins are enabled automatically, or must be present for this one to work.
+                        </p>
+                        <div class="dependency-list">
+                            @foreach ((string id, PluginGroup? group) in dependencies)
+                            {
+                                @if (group is not null && group.Slug == plugin.Slug)
+                                {
+                                    <span class="chip" title="@id">Bundled with this plugin</span>
+                                }
+                                else if (group is not null)
+                                {
+                                    <PluginLinkChip Plugin="@group"/>
+                                }
+                                else
+                                {
+                                    <span class="chip mono" title="Not listed in a hub">@id</span>
+                                }
+                            }
+                            @foreach ((string id, PluginGroup? group) in companions)
+                            {
+                                @if (group is not null && group.Slug == plugin.Slug)
+                                {
+                                    <span class="chip" title="@id">Bundled with this plugin</span>
+                                }
+                                else if (group is not null)
+                                {
+                                    <PluginLinkChip Plugin="@group"/>
+                                }
+                                else
+                                {
+                                    <span class="chip" title="Companion built from the same repository or distributed separately">
+                                        <span class="mono">@id</span><span class="subtle">companion</span>
+                                    </span>
+                                }
+                            }
+                        </div>
+                    </section>
+                }
+
+                <section class="detail-section">
+                    <h2>Manifest</h2>
+                    <p class="muted" style="font-size: 13.5px; margin-bottom: 12px;">
+                        The exact descriptor the hub serves. The pin is <span class="mono">@ShortSha(primary.Commit)</span>.
+                    </p>
+                    <details class="manifest-details">
+                        <summary>
+                            <span>@primary.ManifestPath</span>
+                            <Icon Name="chevron-down" Size="16"/>
+                        </summary>
+                        <pre class="code-block"><code>@PrettyXml(primary.RawXml)</code></pre>
+                    </details>
+
+                    @if (entries.Count > 1)
+                    {
+                        <div class="meta-card" style="margin-top: 12px;">
+                            <h3>Hub descriptors</h3>
+                            <div class="meta-links">
+                                @foreach (PluginEntry entry in entries)
+                                {
+                                    <a href="@entry.ManifestBlobUrl" target="_blank" rel="noopener noreferrer">
+                                        <Icon Name="external" Size="14"/> @entry.HubName · @entry.ManifestPath
+                                    </a>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                @if (related.Count > 0)
+                {
+                    <section class="detail-section">
+                        <h2>More by @plugin.Author</h2>
+                        <div class="section-grid section-grid-3">
+                            @foreach (PluginGroup other in related)
+                            {
+                                <PluginCard Plugin="@other" NoAuthorThumb="true"/>
+                            }
+                        </div>
+                    </section>
+                }
+            </div>
+
+            <aside class="detail-sidebar">
+                <div class="meta-card">
+                    <h3>Details</h3>
+                    <dl class="meta-rows">
+                        <div class="meta-row"><dt>Systems</dt><dd>@string.Join(", ", plugin.Systems.Select(SystemName))</dd></div>
+                        @if (plugin.RepoKey is not null)
+                        {
+                            <div class="meta-row"><dt>Repository</dt><dd><a href="https://github.com/@plugin.RepoKey" target="_blank" rel="noopener noreferrer">@plugin.RepoKey</a></dd></div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(plugin.Version))
+                        {
+                            <div class="meta-row"><dt>Version</dt><dd class="mono">@plugin.Version</dd></div>
+                        }
+                        @if (plugin.Updated is not null)
+                        {
+                            <div class="meta-row"><dt>Updated</dt><dd title="@Text.Date(plugin.Updated)">@Text.RelativeTime(plugin.Updated)</dd></div>
+                        }
+                        <div class="meta-row"><dt>Platforms</dt><dd>@Platforms(plugin)</dd></div>
+                        <div class="meta-row"><dt>Runtimes</dt><dd>@Runtimes(plugin)</dd></div>
+                        @if (license is not null)
+                        {
+                            <div class="meta-row"><dt>License</dt><dd>@license</dd></div>
+                        }
+                        @if (plugin.Repo is not null)
+                        {
+                            <div class="meta-row"><dt>Stars</dt><dd>@Text.Number(plugin.Repo.Stars)</dd></div>
+                        }
+                        @if (plugin.Repo?.Archived == true)
+                        {
+                            <div class="meta-row"><dt>Status</dt><dd><span class="badge badge-warn">Archived</span></dd></div>
+                        }
+                    </dl>
+                </div>
+
+                @if (plugin.PulsarStats is not null || plugin.MagnetarStats is not null)
+                {
+                    <div class="meta-card">
+                        <h3>Community</h3>
+                        <dl class="meta-rows">
+                            @if (plugin.Rating is double rating && plugin.Votes > 0)
+                            {
+                                <div class="meta-row">
+                                    <dt>Rating</dt>
+                                    <dd><StarRating Value="@rating" Votes="@plugin.Votes"/></dd>
+                                </div>
+                            }
+                            @if (plugin.PulsarStats is not null)
+                            {
+                                <div class="meta-row"><dt>Votes</dt><dd>@Text.Number(plugin.Votes)</dd></div>
+                                <div class="meta-row"><dt>Players (30d)</dt><dd>@Text.Number(plugin.PulsarPlayers)</dd></div>
+                            }
+                            @if (plugin.MagnetarStats is not null)
+                            {
+                                <div class="meta-row"><dt>Servers</dt><dd>@Text.Number(plugin.MagnetarServers)</dd></div>
+                            }
+                        </dl>
+                    </div>
+                }
+
+                <div class="meta-card">
+                    <h3>Links</h3>
+                    <div class="meta-links">
+                        @if (plugin.RepoKey is not null)
+                        {
+                            <a href="https://github.com/@plugin.RepoKey" target="_blank" rel="noopener noreferrer">
+                                <Icon Name="github" Size="15"/> @plugin.RepoKey
+                            </a>
+                            <a href="https://github.com/@plugin.RepoKey/issues" target="_blank" rel="noopener noreferrer">
+                                <Icon Name="info" Size="15"/> Issues and support
+                            </a>
+                        }
+                        @if (plugin.CommitUrl is not null)
+                        {
+                            <a href="@plugin.CommitUrl" target="_blank" rel="noopener noreferrer">
+                                <Icon Name="commit" Size="15"/> @ShortSha(plugin.CommitSha)
+                            </a>
+                        }
+                        <a href="@primary.ManifestRawUrl" target="_blank" rel="noopener noreferrer">
+                            <Icon Name="code" Size="15"/> Raw descriptor
+                        </a>
+                    </div>
+                </div>
+
+                @if (plugin.DependencyIds.Count > 0 || plugin.CompanionIds.Count > 0)
+                {
+                    <div class="meta-card">
+                        <h3>Linked plugins</h3>
+                        <p class="subtle" style="font-size: 12.5px;">
+                            @(dependencies.Count + companions.Count) linked plugin@(dependencies.Count + companions.Count == 1 ? "" : "s")
+                        </p>
+                    </div>
+                }
+
+                <div class="meta-card">
+                    <h3>Descriptor</h3>
+                    <div class="copy-row">
+                        <span>@ShortSha(primary.Commit)</span>
+                        <button type="button" data-copy="@primary.Commit" aria-label="Copy commit hash">
+                            <Icon Name="copy" Size="12"/> Copy
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private PluginGroup? _plugin;
+    private ReadmeDocument? _readme;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _plugin = null;
+        _readme = null;
+
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await Store.EnsureReadyAsync(timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Detail page could not load the catalogue");
+        }
+
+        _plugin = Store.View.BySlug.GetValueOrDefault(Slug);
+
+        if (_plugin is not null)
+        {
+            try
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                _readme = await Readmes.GetAsync(_plugin, timeout.Token);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "README for {Plugin} was not available", _plugin.Name);
+            }
+        }
+
+        _loading = false;
+    }
+
+    private string SystemName(string key) =>
+        Options.Value.Hubs.FirstOrDefault(h => string.Equals(h.Key, key, StringComparison.OrdinalIgnoreCase))?.Name
+        ?? key;
+
+    private static string ShortSha(string? sha) =>
+        string.IsNullOrWhiteSpace(sha) ? "unknown" : sha[..Math.Min(7, sha.Length)];
+
+    private static string Platforms(PluginGroup plugin)
+    {
+        if (plugin.Platforms.Count == 0 || plugin.Entries.Any(e => e.Platforms.Count == 0))
+            return "All platforms";
+        return string.Join(", ", plugin.Platforms);
+    }
+
+    private static string Runtimes(PluginGroup plugin)
+    {
+        if (plugin.Runtimes.Count == 0 || plugin.Entries.Any(e => e.Runtimes.Count == 0))
+            return "All runtimes";
+        return string.Join(", ", plugin.Runtimes);
+    }
+
+    private static string PrettyXml(string raw)
+    {
+        try
+        {
+            return XDocument.Parse(raw, LoadOptions.PreserveWhitespace).ToString();
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+
+    private static string JsonLd(PluginGroup plugin)
+    {
+        var data = new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "SoftwareApplication",
+            ["name"] = plugin.Name,
+            ["author"] = new Dictionary<string, string> { ["@type"] = "Person", ["name"] = plugin.Author },
+            ["applicationCategory"] = "GameApplication",
+            ["operatingSystem"] = plugin.Platforms.Count == 0 ? "Windows, Linux" : string.Join(", ", plugin.Platforms),
+            ["description"] = string.IsNullOrWhiteSpace(plugin.Tooltip) ? plugin.Description : plugin.Tooltip,
+            ["url"] = plugin.RepoKey is null ? null : $"https://github.com/{plugin.RepoKey}"
+        };
+
+        return JsonSerializer.Serialize(data);
+    }
+}

@@ -1,0 +1,45 @@
+@code {
+    [Parameter, EditorRequired] public ModEntry Mod { get; set; } = default!;
+}
+
+<article class="plugin-card">
+    <div class="plugin-card-head">
+        <Avatar Name="@Mod.Author" Seed="@Mod.Author"/>
+        <div class="plugin-card-heading">
+            <span class="plugin-card-title static-title" style="white-space: normal;">@Mod.Name</span>
+            <span class="plugin-card-author">@Mod.Author</span>
+        </div>
+    </div>
+
+    <p class="plugin-card-desc">@(string.IsNullOrWhiteSpace(Mod.Tooltip) ? Text.Truncate(Text.OneLine(Mod.Description), 180) : Mod.Tooltip)</p>
+
+    <div class="plugin-card-foot">
+        <span class="badge">Mod</span>
+        @if (Mod.Hidden)
+        {
+            <span class="badge">Hidden</span>
+        }
+        <div class="plugin-card-metrics">
+            @if (Mod.Stats?.Rating > 0)
+            {
+                <span class="metric metric-star" title="@($"{Mod.Stats.Upvotes} up, {Mod.Stats.Downvotes} down")">
+                    <Icon Name="star" Size="13"/>
+                    <strong>@((Mod.Stats.Rating / 2d).ToString("0.0"))</strong>
+                </span>
+            }
+            @if (Mod.Stats?.Players > 0)
+            {
+                <span class="metric" title="Players in the last 30 days">
+                    <Icon Name="users" Size="13"/>
+                    <strong>@Text.Number(Mod.Stats.Players)</strong>
+                </span>
+            }
+            @if (Mod.WorkshopUrl is not null)
+            {
+                <a class="section-link" href="@Mod.WorkshopUrl" target="_blank" rel="noopener noreferrer" style="font-size: 11.5px;">
+                    Workshop <Icon Name="external" Size="12"/>
+                </a>
+            }
+        </div>
+    </div>
+</article>

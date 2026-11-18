@@ -1,0 +1,22 @@
+services:
+  gallery:
+    build: .
+    image: qm-gallery:latest
+    container_name: qm-gallery
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      Gallery__CacheDirectory: /data
+      Gallery__GitHubTokenFile: /run/secrets/github_token
+      Gallery__PublicBaseUrl: ${PUBLIC_BASE_URL:-}
+    ports:
+      - "8081:8080"
+    volumes:
+      # Create this file next to docker-compose.yml with: chmod 400, owned by UID 1000.
+      - ./secrets/github_token.txt:/run/secrets/github_token:ro
+      - gallery-data:/data
+
+volumes:
+  gallery-data:
+    name: qm-gallery-data

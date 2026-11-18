@@ -1,0 +1,87 @@
+@page "/about"
+@using Microsoft.Extensions.Options
+@inject IOptions<GalleryOptions> Options
+
+<PageTitle>About · QM Gallery</PageTitle>
+
+<div class="container">
+    <div class="prose-page">
+        <PageHead Title="About QM Gallery"
+                  PageTitle="About"
+                  Description="A read-only catalogue of Space Engineers plugins for Pulsar, Magnetar and Quasar."/>
+
+        <div class="prose">
+            <p>
+                The three systems solve different problems, but they share one distribution model: a hub repository holds small
+                XML descriptors that pin a public GitHub repository to an exact commit. The loader downloads that commit, compiles
+                it, and runs it. QM Gallery reads those same descriptors and turns them into something you can browse.
+            </p>
+            <p>
+                There is no login and nothing to publish here. Everything is discovered from the official hubs, and installation
+                still happens inside Pulsar, Magnetar or Quasar.
+            </p>
+        </div>
+
+        <div class="info-grid">
+            @foreach (HubDefinition hub in Options.Value.Hubs)
+            {
+                <div class="info-card">
+                    <span class="system-badge system-@hub.Tone">@hub.Name</span>
+                    <h3>@hub.Name</h3>
+                    <p>@hub.Description</p>
+                    @if (!string.IsNullOrWhiteSpace(hub.Homepage))
+                    {
+                        <p style="margin-top: 10px;">
+                            <a class="section-link" href="@hub.Homepage" target="_blank" rel="noopener noreferrer">
+                                Project site <Icon Name="external" Size="13"/>
+                            </a>
+                        </p>
+                    }
+                    <p>
+                        <a class="section-link" href="https://github.com/@hub.Repo" target="_blank" rel="noopener noreferrer">
+                            Hub repository <Icon Name="github" Size="13"/>
+                        </a>
+                    </p>
+                </div>
+            }
+        </div>
+
+        <div class="prose">
+            <h2>How the catalogue is built</h2>
+            <ul>
+                <li>The three hub repositories are downloaded and every descriptor is parsed on a schedule.</li>
+                <li>Plugins published to more than one hub are merged into one entry with availability badges. Legacy IDs are folded into the plugin they belong to.</li>
+                <li>The pinned commit is read from GitHub, so “updated” means the version the hub is actually shipping, not the repository's latest activity.</li>
+                <li>READMEs are fetched from the pinned commit, rendered, and sanitised before being shown.</li>
+                <li>Pulsar ratings, votes and player counts come from the official Pulsar statistics service. Magnetar server counts come from the Magnetar statistics service. Quasar UI plugins have no rating service, so no score is invented for them.</li>
+                <li>Everything is cached on disk with an expiry and refreshed in the background. If a hub is briefly unavailable, the last good copy stays visible.</li>
+            </ul>
+
+            <h2>What is deliberately missing</h2>
+            <ul>
+                <li>No accounts, no publishing, no comments and no voting. Votes belong to the clients.</li>
+                <li>No plugin binaries are hosted. The repository link is the source of truth.</li>
+                <li>No invented categories or tags. Filters use fields that exist in the manifests or in GitHub metadata.</li>
+            </ul>
+
+            <h2>Unofficial</h2>
+            <p>
+                QM Gallery is a community project and is not affiliated with Keen Software House, Pulsar, Magnetar or Quasar.
+                Plugin names, descriptions and READMEs belong to their authors.
+            </p>
+        </div>
+
+        <div class="cta-card" style="margin-top: 28px;">
+            <div>
+                <h3>Questions, bugs or plugin development</h3>
+                <p>The community Discord is the place for support and hub reviews.</p>
+            </div>
+            <div class="cta-actions">
+                <a class="btn btn-primary" href="@Options.Value.DiscordUrl" target="_blank" rel="noopener noreferrer">
+                    <Icon Name="discord" Size="16"/> Join the Discord
+                </a>
+                <a class="btn btn-secondary" href="/status">Catalogue status</a>
+            </div>
+        </div>
+    </div>
+</div>

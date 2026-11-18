@@ -1,0 +1,20 @@
+@code {
+    [Parameter] public string Type { get; set; } = "checkbox";
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public bool Checked { get; set; }
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public int? Count { get; set; }
+    [Parameter] public EventCallback<bool> CheckedChanged { get; set; }
+
+    private Task OnChange(ChangeEventArgs args) =>
+        CheckedChanged.InvokeAsync(args.Value is true);
+}
+
+<label class="filter-option">
+    <input type="@Type" name="@Name" checked="@Checked" @onchange="OnChange"/>
+    <span>@Label</span>
+    @if (Count is not null)
+    {
+        <span class="count">@Count</span>
+    }
+</label>

@@ -1,0 +1,247 @@
+﻿@page "/"
+@using Microsoft.Extensions.Options
+@inject GalleryStore Store
+@inject IOptions<GalleryOptions> Options
+@inject ILogger<Home> Logger
+
+<PageTitle>QM Gallery — Space Engineers plugins for Pulsar, Magnetar and Quasar</PageTitle>
+<HeadContent>
+    <meta property="og:title" content="QM Gallery — Space Engineers plugins"/>
+    <meta property="og:description" content="Browse plugins for Pulsar, Magnetar and Quasar with ratings, usage, READMEs and pinned versions."/>
+    <meta property="og:type" content="website"/>
+</HeadContent>
+
+@if (_loading)
+{
+    <div class="container">
+        <section class="hero">
+            <div class="hero-inner">
+                <div class="skeleton" style="width: 180px; height: 14px; margin: 0 auto;"></div>
+                <div class="skeleton" style="width: min(560px, 80%); height: 46px; margin: 20px auto;"></div>
+                <div class="skeleton" style="width: min(460px, 70%); height: 18px; margin: 0 auto;"></div>
+                <div class="skeleton" style="width: min(600px, 100%); height: 52px; margin: 28px auto 0; border-radius: 12px;"></div>
+            </div>
+        </section>
+    </div>
+}
+else if (_loadFailed)
+{
+    <div class="container">
+        <EmptyState Icon="alert"
+                    Title="The catalogue is taking longer than expected"
+                    Message="The hub repositories could not be reached on the first attempt. The gallery keeps retrying in the background."
+                    Style="margin-top: 64px;">
+            <a class="btn btn-secondary" href="/">Try again</a>
+            <a class="btn btn-ghost" href="@Options.Value.DiscordUrl" target="_blank" rel="noopener noreferrer">Ask on Discord</a>
+        </EmptyState>
+    </div>
+}
+else
+{
+    GalleryView view = Store.View;
+    List<PluginGroup> visible = view.Plugins.Where(p => !p.IsHidden).ToList();
+    List<HubDefinition> hubs = Options.Value.Hubs;
+    int authorCount = visible.Select(p => p.Author).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+    List<PluginGroup> recent = visible
+        .Where(p => p.Updated is not null)
+        .OrderByDescending(p => p.Updated)
+        .Take(8)
+        .ToList();
+    List<PluginGroup> topRated = visible
+        .Where(p => p.Votes >= 8)
+        .OrderByDescending(p => p.WeightedRating)
+        .Take(6)
+        .ToList();
+    List<PluginGroup> mostUsed = visible
+        .Where(p => p.PulsarPlayers > 0)
+        .OrderByDescending(p => p.PulsarPlayers)
+        .Take(6)
+        .ToList();
+    List<IGrouping<string, PluginGroup>> authors = visible
+        .GroupBy(p => p.Author, StringComparer.OrdinalIgnoreCase)
+        .OrderByDescending(g => g.Count())
+        .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .Take(12)
+        .ToList();
+
+    <section class="hero" data-page-title="Space Engineers plugins for Pulsar, Magnetar and Quasar">
+        <div class="container">
+            <div class="hero-inner">
+                <span class="eyebrow"><Icon Name="layers" Size="14"/> Space Engineers plugin gallery</span>
+                <h1>Every plugin,<br/>in one place.</h1>
+                <p class="hero-sub">
+                    Browse community plugins for Pulsar clients, Magnetar servers and Quasar control planes —
+                    with real usage, ratings, READMEs and the exact pinned version.
+                </p>
+
+                <form class="hero-search" method="get" action="/plugins" role="search">
+                    <div class="search-field search-field-lg">
+                        <Icon Name="search" Size="19"/>
+                        <input class="input" type="search" name="q" placeholder="Search plugins, authors or features…" aria-label="Search plugins"/>
+                    </div>
+                </form>
+
+                <div class="hero-systems">
+                    @foreach (HubDefinition hub in hubs)
+                    {
+                        int count = visible.Count(p => p.Systems.Contains(hub.Key, StringComparer.OrdinalIgnoreCase));
+                        <a class="chip" href="/plugins?systems=@hub.Key">
+                            <span class="system-badge system-@hub.Tone">@hub.Name</span>
+                            <span class="chip-count">@count</span>
+                        </a>
+                    }
+                </div>
+
+                <div class="hero-stats">
+                    <div class="hero-stat"><strong>@Text.Number(visible.Count)</strong><span>plugins</span></div>
+                    <div class="hero-stat"><strong>@Text.Number(authorCount)</strong><span>authors</span></div>
+                    <div class="hero-stat"><strong>@Text.Number(view.Mods.Count(m => !m.Hidden))</strong><span>mods</span></div>
+                    <div class="hero-stat"><strong>@hubs.Count</strong><span>systems</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="container">
+        <section class="section">
+            <SectionHead Title="Choose your system" Subtitle="Three parts of the same ecosystem, one catalogue."/>
+
+            <div class="system-tiles">
+                @foreach (HubDefinition hub in hubs)
+                {
+                    int count = visible.Count(p => p.Systems.Contains(hub.Key, StringComparer.OrdinalIgnoreCase));
+                    <a class="system-tile" href="/plugins?systems=@hub.Key">
+                        <div class="system-tile-head">
+                            <span class="system-icon system-@hub.Tone">
+                                <Icon Name="@SystemIcon(hub)" Size="20"/>
+                            </span>
+                            <h3>@hub.Name</h3>
+                            <span class="system-badge system-@hub.Tone" style="margin-left:auto;">@count</span>
+                        </div>
+                        <p>@hub.Description</p>
+                        <div class="system-tile-foot">
+                            <strong>@count plugin@(count == 1 ? "" : "s")</strong>
+                            <span>Browse <Icon Name="arrow-right" Size="13"/></span>
+                        </div>
+                    </a>
+                }
+            </div>
+        </section>
+
+        @if (recent.Count > 0)
+        {
+            <section class="section">
+                <SectionHead Title="Recently updated"
+                             Subtitle="Newest pinned versions across all three hubs."
+                             LinkHref="/plugins?sort=updated"
+                             LinkText="View all"/>
+                <div class="section-grid">
+                    @foreach (PluginGroup plugin in recent)
+                    {
+                        <PluginCard Plugin="@plugin"/>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (topRated.Count > 0)
+        {
+            <section class="section">
+                <SectionHead Title="Top rated"
+                             Subtitle="Weighted by votes from Pulsar players, so a handful of votes can't top the list."
+                             LinkHref="/plugins?sort=rating"
+                             LinkText="View all"/>
+                <div class="section-grid section-grid-3">
+                    @foreach (PluginGroup plugin in topRated)
+                    {
+                        <PluginCard Plugin="@plugin"/>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (mostUsed.Count > 0)
+        {
+            <section class="section">
+                <SectionHead Title="Most used"
+                             Subtitle="Players who ran the plugin in the last 30 days."
+                             LinkHref="/plugins?sort=players"
+                             LinkText="View all"/>
+                <div class="section-grid section-grid-3">
+                    @foreach (PluginGroup plugin in mostUsed)
+                    {
+                        <PluginCard Plugin="@plugin"/>
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="section">
+            <SectionHead Title="Browse by author"
+                         Subtitle="The people building the ecosystem."
+                         LinkHref="/authors"
+                         LinkText="All authors"/>
+            <div class="author-strip">
+                @foreach (IGrouping<string, PluginGroup> author in authors)
+                {
+                    <a class="author-pill" href="/plugins?author=@Uri.EscapeDataString(author.Key)">
+                        <Avatar Name="@author.Key" Seed="@OwnerFor(author)" Owner="@OwnerFor(author)" Size="sm"/>
+                        @author.Key
+                        <span>@author.Count()</span>
+                    </a>
+                }
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="cta-card">
+                <div>
+                    <h3>Need help or want to publish a plugin?</h3>
+                    <p>Join the community Discord for support, development help and hub reviews.</p>
+                </div>
+                <div class="cta-actions">
+                    <a class="btn btn-primary" href="@Options.Value.DiscordUrl" target="_blank" rel="noopener noreferrer">
+                        <Icon Name="discord" Size="16"/> Join the Discord
+                    </a>
+                    <a class="btn btn-secondary" href="/about">How it works</a>
+                </div>
+            </div>
+        </section>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _loadFailed;
+
+    private static string SystemIcon(HubDefinition hub) =>
+        hub.IsClient ? "monitor" : hub.IsServer ? "server" : "grid";
+
+    private static string? OwnerFor(IGrouping<string, PluginGroup> author) =>
+        author.Select(p => p.RepoOwner)
+            .Where(owner => !string.IsNullOrWhiteSpace(owner))
+            .GroupBy(owner => owner!, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Key)
+            .FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+            await Store.EnsureReadyAsync(timeout.Token);
+            _loadFailed = Store.View.Plugins.Count == 0 && Store.View.Mods.Count == 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Home page could not load the catalogue");
+            _loadFailed = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -1,0 +1,109 @@
+@page "/authors"
+@using Microsoft.Extensions.Options
+@inject GalleryStore Store
+@inject IOptions<GalleryOptions> Options
+
+<PageTitle>Authors · QM Gallery</PageTitle>
+
+@{
+    GalleryView view = Store.View;
+    List<PluginGroup> visible = view.Plugins.Where(p => !p.IsHidden).ToList();
+    string query = Q?.Trim() ?? "";
+    var authors = visible
+        .GroupBy(p => p.Author, StringComparer.OrdinalIgnoreCase)
+        .Where(g => query.Length == 0 || g.Key.Contains(query, StringComparison.OrdinalIgnoreCase))
+        .OrderByDescending(g => g.Count())
+        .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+}
+
+<div class="container">
+    <PageHead Title="Authors"
+              Description="@($"{Text.Number(visible.Select(p => p.Author).Distinct(StringComparer.OrdinalIgnoreCase).Count())} people publish plugins across the Pulsar, Magnetar and Quasar hubs.")"/>
+
+    <form method="get" action="/authors" class="catalog-toolbar" style="max-width: 460px;">
+        <div class="search-field" style="flex: 1;">
+            <Icon Name="search" Size="17"/>
+            <input class="input" type="search" name="q" value="@query" placeholder="Find an author…" aria-label="Find an author"/>
+        </div>
+        <button class="btn btn-secondary" type="submit">Search</button>
+    </form>
+
+    <div class="result-bar">
+        <span><strong>@authors.Count</strong> @(authors.Count == 1 ? "author" : "authors")</span>
+        @if (query.Length > 0)
+        {
+            <a class="section-link" href="/authors">Clear</a>
+        }
+    </div>
+
+    @if (authors.Count == 0)
+    {
+        <EmptyState Icon="users"
+                    Title="@($"No authors match “{query}”")"
+                    Message="Try a different spelling or browse the full list.">
+            <a class="btn btn-primary" href="/authors">Show all authors</a>
+        </EmptyState>
+    }
+    else
+    {
+        <div class="author-grid">
+            @foreach (var author in authors)
+            {
+                int pluginCount = author.Count();
+                int repoCount = author
+                    .Select(p => p.RepoKey)
+                    .Where(r => !string.IsNullOrWhiteSpace(r))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Count();
+
+                <a class="author-card" href="/plugins?author=@Uri.EscapeDataString(author.Key)">
+                    <Avatar Name="@author.Key" Seed="@OwnerFor(author)" Owner="@OwnerFor(author)"/>
+                    <div class="author-card-body">
+                        <strong>@author.Key</strong>
+                        <small>
+                            @pluginCount plugin@(pluginCount == 1 ? "" : "s")
+                            @if (repoCount > 0)
+                            {
+                                <span> · @repoCount repo@(repoCount == 1 ? "" : "s")</span>
+                            }
+                        </small>
+                        <div class="plugin-card-systems" style="margin-top: 6px;">
+                            @foreach (string system in author.SelectMany(p => p.Systems).Distinct().OrderBy(s => s))
+                            {
+                                <SystemBadge Key="@system"/>
+                            }
+                        </div>
+                    </div>
+                    <span class="author-card-count">@pluginCount</span>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private static string? OwnerFor(IGrouping<string, PluginGroup> author) =>
+        author.Select(p => p.RepoOwner)
+            .Where(owner => !string.IsNullOrWhiteSpace(owner))
+            .GroupBy(owner => owner!, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(group => group.Count())
+            .ThenBy(group => group.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Key)
+            .FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await Store.EnsureReadyAsync(timeout.Token);
+        }
+        catch
+        {
+            // The empty state is enough if the catalogue cannot load.
+        }
+    }
+}

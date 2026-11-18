@@ -1,0 +1,57 @@
+@code {
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? Seed { get; set; }
+    [Parameter] public string? Owner { get; set; }
+    [Parameter] public string Size { get; set; } = "md";
+
+    private string Initials
+    {
+        get
+        {
+            string value = (Name ?? "?").Trim();
+            if (value.Length == 0)
+                return "?";
+
+            string[] parts = value.Split([' ', '-', '_', '.'], StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+                return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+
+            return value.Length >= 2
+                ? value[..2].ToUpperInvariant()
+                : value.ToUpperInvariant();
+        }
+    }
+
+    private int Tone
+    {
+        get
+        {
+            string seed = string.IsNullOrWhiteSpace(Seed) ? Name ?? "" : Seed;
+            int hash = 0;
+            foreach (char c in seed)
+                hash = unchecked(hash * 31 + c);
+            return Math.Abs(hash % 8);
+        }
+    }
+
+    private string SizeClass => Size switch
+    {
+        "sm" => "tile tile-sm",
+        "lg" => "tile tile-lg",
+        _ => "tile"
+    };
+}
+
+<span class="@SizeClass tile-@Tone avatar" aria-hidden="true">
+    <span class="avatar-initials">@Initials</span>
+    @if (!string.IsNullOrWhiteSpace(Owner))
+    {
+        <img class="avatar-image"
+             src="https://github.com/@(Owner).png?size=96"
+             alt=""
+             loading="lazy"
+             decoding="async"
+             referrerpolicy="no-referrer"
+             data-avatar/>
+    }
+</span>

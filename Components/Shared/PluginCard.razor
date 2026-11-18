@@ -1,0 +1,70 @@
+@code {
+    [Parameter, EditorRequired] public PluginGroup Plugin { get; set; } = default!;
+    [Parameter] public bool NoAuthorThumb { get; set; }
+
+    private string Description =>
+        !string.IsNullOrWhiteSpace(Plugin.Tooltip)
+            ? Plugin.Tooltip
+            : Text.Truncate(Text.OneLine(Plugin.Description), 180);
+}
+
+<article class="plugin-card">
+    <div class="plugin-card-head">
+        @if (!NoAuthorThumb)
+        {
+            <Avatar Name="@Plugin.Author" Seed="@(Plugin.RepoOwner ?? Plugin.Author)" Owner="@Plugin.RepoOwner"/>
+        }
+        <div class="plugin-card-heading">
+            <a class="plugin-card-title" href="/plugins/@Plugin.Slug">@Plugin.Name</a>
+            <span class="plugin-card-author">@Plugin.Author</span>
+        </div>
+    </div>
+
+    <p class="plugin-card-desc">@Description</p>
+
+    <div class="plugin-card-foot">
+        <div class="plugin-card-systems">
+            @foreach (string system in Plugin.Systems)
+            {
+                <SystemBadge Key="@system"/>
+            }
+            @if (Plugin.IsDependency)
+            {
+                <span class="badge">Dependency</span>
+            }
+            else if (Plugin.IsHidden)
+            {
+                <span class="badge">Hidden</span>
+            }
+        </div>
+
+        <div class="plugin-card-metrics">
+            @if (Plugin.Rating is double rating && Plugin.Votes > 0)
+            {
+                <span class="metric metric-star" title="@Plugin.Votes votes">
+                    <Icon Name="star" Size="13" StrokeWidth="1.6"/>
+                    <strong>@rating.ToString("0.0")</strong>
+                </span>
+            }
+            else if (Plugin.PulsarPlayers > 0)
+            {
+                <span class="metric" title="Players with this plugin enabled in the last 30 days">
+                    <Icon Name="users" Size="13"/>
+                    <strong>@Text.Number(Plugin.PulsarPlayers)</strong>
+                </span>
+            }
+            else if (Plugin.MagnetarServers > 0)
+            {
+                <span class="metric" title="Servers reporting this plugin">
+                    <Icon Name="server" Size="13"/>
+                    <strong>@Text.Number(Plugin.MagnetarServers)</strong>
+                </span>
+            }
+
+            @if (Plugin.Updated is not null)
+            {
+                <span class="updated" title="@Text.Date(Plugin.Updated)">@Text.RelativeTime(Plugin.Updated)</span>
+            }
+        </div>
+    </div>
+</article>

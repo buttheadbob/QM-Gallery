@@ -1,0 +1,680 @@
+@page "/plugins"
+@rendermode InteractiveServer
+@implements IDisposable
+@using Microsoft.Extensions.Options
+@inject GalleryStore Store
+@inject IOptions<GalleryOptions> Options
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<Catalog> Logger
+
+<PageTitle>Plugins · QM Gallery</PageTitle>
+
+<div class="container" data-page-title="@PageTitleText">
+    <PageHead Title="Plugins"
+              Description="Everything published through the Pulsar, Magnetar and Quasar hubs. Ratings and usage come from the official statistics services."/>
+
+    <div class="catalog-layout">
+        <aside class="filters" id="filters" aria-label="Filters">
+            <div class="filters-head">
+                <h2>Filters</h2>
+                <button type="button" class="filters-clear" @onclick="ClearAll">Clear all</button>
+            </div>
+
+            @if (Options.Value.Hubs.Count > 0)
+            {
+                <div class="filter-group">
+                    <span class="filter-label">System</span>
+                    @foreach (HubDefinition hub in Options.Value.Hubs)
+                    {
+                        <FilterOption Label="@hub.Name"
+                                      Count="@CountFor("systems", hub.Key)"
+                                      Checked="@_systems.Contains(hub.Key)"
+                                      CheckedChanged="@(selected => SetSystem(hub.Key, selected))"/>
+                    }
+                </div>
+            }
+
+            <div class="filter-group">
+                <span class="filter-label">Platform</span>
+                @foreach (string platform in Platforms)
+                {
+                    <FilterOption Label="@platform"
+                                  Count="@CountFor("platforms", platform)"
+                                  Checked="@_platforms.Contains(platform)"
+                                  CheckedChanged="@(selected => SetPlatform(platform, selected))"/>
+                }
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Runtime</span>
+                @foreach (string runtime in Runtimes)
+                {
+                    <FilterOption Label="@runtime"
+                                  Count="@CountFor("runtimes", runtime)"
+                                  Checked="@_runtimes.Contains(runtime)"
+                                  CheckedChanged="@(selected => SetRuntime(runtime, selected))"/>
+                }
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">Updated</span>
+                @foreach ((string Value, string Label) option in UpdatedOptions)
+                {
+                    <FilterOption Type="radio"
+                                  Name="updated"
+                                  Label="@option.Label"
+                                  Checked="@(_updated == option.Value)"
+                                  CheckedChanged="@(_ => SetUpdated(option.Value))"/>
+                }
+            </div>
+
+            <div class="filter-group">
+                <span class="filter-label">More</span>
+                <FilterOption Label="Has dependencies" Checked="@_deps" CheckedChanged="@SetDependencies"/>
+                <FilterOption Label="Show hidden" Checked="@_hidden" CheckedChanged="@SetHidden"/>
+            </div>
+
+            <button type="button" class="btn btn-secondary filters-done" data-filters-close>
+                Done
+            </button>
+        </aside>
+
+        <div class="filters-scrim" data-filters-close></div>
+
+        <section class="catalog-results">
+            <div class="catalog-toolbar">
+                <div class="search-field" style="flex: 1;">
+                    <Icon Name="search" Size="17"/>
+                    <input class="input"
+                           type="search"
+                           value="@_query"
+                           @oninput="OnSearchInput"
+                           placeholder="Search plugins, authors or features…"
+                           aria-label="Search plugins"/>
+                </div>
+
+                <button type="button" class="btn btn-secondary filters-toggle" data-filters-toggle>
+                    <Icon Name="filter" Size="16"/> Filters
+                    @if (ActiveFilterCount > 0)
+                    {
+                        <span class="badge badge-accent">@ActiveFilterCount</span>
+                    }
+                </button>
+
+                <select class="select" value="@_sort" @onchange="OnSortChanged" aria-label="Sort plugins">
+                    <option value="relevance">Best match</option>
+                    <option value="updated">Recently updated</option>
+                    <option value="rating">Top rated</option>
+                    <option value="players">Most used</option>
+                    <option value="stars">Most starred</option>
+                    <option value="name">Name A–Z</option>
+                    <option value="author">Author A–Z</option>
+                </select>
+
+                <div class="view-toggle" role="group" aria-label="View mode">
+                    <button type="button" aria-pressed="@IsGridView" title="Grid view" @onclick="SetGridView">
+                        <Icon Name="grid" Size="16"/>
+                    </button>
+                    <button type="button" aria-pressed="@IsListView" title="List view" @onclick="SetListView">
+                        <Icon Name="list" Size="16"/>
+                    </button>
+                </div>
+            </div>
+
+            @if (ActiveFilterCount > 0 || !string.IsNullOrWhiteSpace(_author))
+            {
+                <div class="active-filters">
+                    @if (!string.IsNullOrWhiteSpace(_author))
+                    {
+                        <button type="button" class="chip chip-active" @onclick="ClearAuthor">
+                            Author: @_author
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                    @foreach (string system in _systems.OrderBy(s => s))
+                    {
+                        <button type="button" class="chip chip-active" @onclick="() => RemoveSystem(system)">
+                            @SystemName(system)
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                    @foreach (string platform in _platforms.OrderBy(p => p))
+                    {
+                        <button type="button" class="chip chip-active" @onclick="() => RemovePlatform(platform)">
+                            @platform
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                    @foreach (string runtime in _runtimes.OrderBy(r => r))
+                    {
+                        <button type="button" class="chip chip-active" @onclick="() => RemoveRuntime(runtime)">
+                            @runtime
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                    @if (_updated != "any")
+                    {
+                        <button type="button" class="chip chip-active" @onclick="ResetUpdated">
+                            Updated in @_updated days
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                    @if (_deps)
+                    {
+                        <button type="button" class="chip chip-active" @onclick="ToggleDependencies">
+                            Has dependencies
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                    @if (_hidden)
+                    {
+                        <button type="button" class="chip chip-active" @onclick="ToggleHidden">
+                            Hidden included
+                            <Icon Name="x" Size="12"/>
+                        </button>
+                    }
+                </div>
+            }
+
+            <div class="result-bar" id="results">
+                <span>
+                    <strong>@Text.Number(_result.Total)</strong>
+                    @(_result.Total == 1 ? "plugin" : "plugins")
+                    @if (!string.IsNullOrWhiteSpace(_query))
+                    {
+                        <span> for “@_query”</span>
+                    }
+                </span>
+                @if (_result.Total > 0)
+                {
+                    <span>
+                        Showing @((_result.Page - 1) * PageSize + 1)–@Math.Min(_result.Page * PageSize, _result.Total)
+                    </span>
+                }
+            </div>
+
+            @if (_loading)
+            {
+                <div class="plugin-grid">
+                    @for (int i = 0; i < 6; i++)
+                    {
+                        <div class="plugin-card">
+                            <div class="skeleton" style="width: 42px; height: 42px; border-radius: 11px;"></div>
+                            <div class="skeleton" style="width: 70%; height: 15px;"></div>
+                            <div class="skeleton" style="width: 90%; height: 12px;"></div>
+                            <div class="skeleton" style="width: 60%; height: 12px;"></div>
+                        </div>
+                    }
+                </div>
+            }
+            else if (_result.Items.Count == 0)
+            {
+                <EmptyState Icon="search"
+                            Title="No plugins match those filters"
+                            Message="Try a shorter search, a different system, or include hidden dependency plugins.">
+                    <button type="button" class="btn btn-primary" @onclick="ClearAll">Clear filters</button>
+                    <a class="btn btn-ghost" href="@Options.Value.DiscordUrl" target="_blank" rel="noopener noreferrer">Ask on Discord</a>
+                </EmptyState>
+            }
+            else if (_view == "list")
+            {
+                <div class="plugin-list">
+                    @foreach (PluginGroup plugin in _result.Items)
+                    {
+                        <div class="plugin-row">
+                            <div class="plugin-row-main">
+                                @if (string.IsNullOrWhiteSpace(_author))
+                                {
+                                    <Avatar Name="@plugin.Author" Seed="@(plugin.RepoOwner ?? plugin.Author)" Owner="@plugin.RepoOwner" Size="sm"/>
+                                }
+                                <div style="min-width: 0;">
+                                    <div>
+                                        <a class="plugin-row-title" href="/plugins/@plugin.Slug">@plugin.Name</a>
+                                    </div>
+                                    <div class="plugin-row-author">@plugin.Author</div>
+                                </div>
+                            </div>
+                            <div class="plugin-row-desc">@(string.IsNullOrWhiteSpace(plugin.Tooltip) ? Text.OneLine(plugin.Description) : plugin.Tooltip)</div>
+                            <div class="plugin-row-meta">
+                                @foreach (string system in plugin.Systems)
+                                {
+                                    <SystemBadge Key="@system"/>
+                                }
+                                @if (plugin.Rating is double rating && plugin.Votes > 0)
+                                {
+                                    <span class="metric metric-star"><Icon Name="star" Size="12"/><strong>@rating.ToString("0.0")</strong></span>
+                                }
+                                else if (plugin.PulsarPlayers > 0)
+                                {
+                                    <span class="metric"><Icon Name="users" Size="12"/><strong>@Text.Number(plugin.PulsarPlayers)</strong></span>
+                                }
+                                @if (plugin.Updated is not null)
+                                {
+                                    <span class="updated">@Text.RelativeTime(plugin.Updated)</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="plugin-grid">
+                    @foreach (PluginGroup plugin in _result.Items)
+                    {
+                        <PluginCard Plugin="@plugin" NoAuthorThumb="@(!string.IsNullOrWhiteSpace(_author))"/>
+                    }
+                </div>
+            }
+
+            @if (!_loading && _result.PageCount > 1)
+            {
+                <nav class="pagination" aria-label="Pagination">
+                    <button type="button" class="btn btn-secondary btn-sm" disabled="@(_result.Page <= 1)" @onclick="() => GoToPage(_result.Page - 1)">
+                        <Icon Name="chevron-left" Size="15"/> Previous
+                    </button>
+                    <span class="pagination-info">Page @_result.Page of @_result.PageCount</span>
+                    <button type="button" class="btn btn-secondary btn-sm" disabled="@(_result.Page >= _result.PageCount)" @onclick="() => GoToPage(_result.Page + 1)">
+                        Next <Icon Name="chevron-right" Size="15"/>
+                    </button>
+                </nav>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    private static readonly string[] Platforms = ["Windows", "Linux", "Proton"];
+    private static readonly string[] Runtimes = ["CoreCLR", "CLR", "Mono", "NETCoreApp"];
+    private static readonly (string Value, string Label)[] UpdatedOptions =
+    [
+        ("any", "Any time"),
+        ("30", "Last 30 days"),
+        ("90", "Last 90 days"),
+        ("365", "Last year")
+    ];
+
+    private const int PageSize = 36;
+
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+    [SupplyParameterFromQuery(Name = "systems")] public string? SystemsParam { get; set; }
+    [SupplyParameterFromQuery(Name = "platforms")] public string? PlatformsParam { get; set; }
+    [SupplyParameterFromQuery(Name = "runtimes")] public string? RuntimesParam { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortParam { get; set; }
+    [SupplyParameterFromQuery(Name = "updated")] public string? UpdatedParam { get; set; }
+    [SupplyParameterFromQuery(Name = "deps")] public string? DepsParam { get; set; }
+    [SupplyParameterFromQuery(Name = "hidden")] public string? HiddenParam { get; set; }
+    [SupplyParameterFromQuery(Name = "view")] public string? ViewParam { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int PageParam { get; set; } = 1;
+    [SupplyParameterFromQuery(Name = "author")] public string? AuthorParam { get; set; }
+
+    private readonly HashSet<string> _systems = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _platforms = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _runtimes = new(StringComparer.OrdinalIgnoreCase);
+    private string _query = "";
+    private string _sort = "updated";
+    private string _updated = "any";
+    private bool _deps;
+    private bool _hidden;
+    private string _view = "grid";
+    private string _author = "";
+    private int _page = 1;
+    private CatalogResult _result = new();
+    private bool _loading = true;
+    private bool _initialized;
+    private bool _sortPinned;
+    private string? _lastParamQuery;
+    private CancellationTokenSource? _debounce;
+
+    private bool IsGridView => _view == "grid";
+    private bool IsListView => _view == "list";
+
+    private string PageTitleText => string.IsNullOrWhiteSpace(_query)
+        ? "Plugins"
+        : $"{_query} · Plugins";
+
+    private int ActiveFilterCount =>
+        _systems.Count + _platforms.Count + _runtimes.Count + (_updated != "any" ? 1 : 0)
+        + (_deps ? 1 : 0) + (_hidden ? 1 : 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await Store.EnsureReadyAsync(timeout.Token);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Catalog could not be loaded");
+        }
+
+        _loading = false;
+        _initialized = true;
+        ReadParameters();
+        Apply();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!_initialized)
+            return;
+
+        ReadParameters();
+        Apply();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("qmSyncTitle");
+        }
+        catch (JSDisconnectedException)
+        {
+            // Prerendering or a disconnected circuit.
+        }
+    }
+
+    private void ReadParameters()
+    {
+        if (!string.Equals(Query, _lastParamQuery, StringComparison.Ordinal))
+        {
+            _query = Query ?? "";
+            _lastParamQuery = Query;
+        }
+
+        _systems.Clear();
+        foreach (string value in Split(SystemsParam))
+            _systems.Add(value);
+
+        _platforms.Clear();
+        foreach (string value in Split(PlatformsParam))
+            _platforms.Add(value);
+
+        _runtimes.Clear();
+        foreach (string value in Split(RuntimesParam))
+            _runtimes.Add(value);
+
+        _sort = string.IsNullOrWhiteSpace(SortParam)
+            ? string.IsNullOrWhiteSpace(_query) ? "updated" : "relevance"
+            : SortParam!;
+        _sortPinned = !string.IsNullOrWhiteSpace(SortParam);
+        _updated = string.IsNullOrWhiteSpace(UpdatedParam) ? "any" : UpdatedParam!;
+        _deps = string.Equals(DepsParam, "1", StringComparison.Ordinal)
+            || string.Equals(DepsParam, "true", StringComparison.OrdinalIgnoreCase);
+        _hidden = string.Equals(HiddenParam, "1", StringComparison.Ordinal)
+            || string.Equals(HiddenParam, "true", StringComparison.OrdinalIgnoreCase);
+        _view = string.Equals(ViewParam, "list", StringComparison.OrdinalIgnoreCase) ? "list" : "grid";
+        _author = AuthorParam ?? "";
+        _page = Math.Max(1, PageParam);
+    }
+
+    private void Apply()
+    {
+        NormalizeSort();
+        _result = CatalogQueryEngine.Query(Store.View.Plugins, new CatalogRequest
+        {
+            Q = _query,
+            Systems = _systems.ToList(),
+            Platforms = _platforms.ToList(),
+            Runtimes = _runtimes.ToList(),
+            Sort = _sort,
+            Updated = _updated,
+            Dependencies = _deps,
+            Hidden = _hidden,
+            Author = _author,
+            Page = _page,
+            PageSize = PageSize
+        });
+
+        _page = _result.Page;
+    }
+
+    private void NormalizeSort()
+    {
+        if (_sortPinned)
+            return;
+
+        _sort = string.IsNullOrWhiteSpace(_query) ? "updated" : "relevance";
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs args)
+    {
+        _query = args.Value?.ToString() ?? "";
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+        _debounce = new CancellationTokenSource();
+        CancellationToken token = _debounce.Token;
+
+        try
+        {
+            await Task.Delay(280, token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _page = 1;
+        Apply();
+        Navigate(replace: true);
+    }
+
+    private void SetSystem(string key, bool selected)
+    {
+        if (selected)
+            _systems.Add(key);
+        else
+            _systems.Remove(key);
+        Changed();
+    }
+
+    private void SetPlatform(string platform, bool selected)
+    {
+        if (selected)
+            _platforms.Add(platform);
+        else
+            _platforms.Remove(platform);
+        Changed();
+    }
+
+    private void SetRuntime(string runtime, bool selected)
+    {
+        if (selected)
+            _runtimes.Add(runtime);
+        else
+            _runtimes.Remove(runtime);
+        Changed();
+    }
+
+    private void SetDependencies(bool selected)
+    {
+        _deps = selected;
+        Changed();
+    }
+
+    private void SetHidden(bool selected)
+    {
+        _hidden = selected;
+        Changed();
+    }
+
+    private void ToggleDependencies()
+    {
+        SetDependencies(!_deps);
+    }
+
+    private void ToggleHidden()
+    {
+        SetHidden(!_hidden);
+    }
+
+    private void SetUpdated(string value)
+    {
+        _updated = value;
+        Changed();
+    }
+
+    private void RemoveSystem(string key)
+    {
+        _systems.Remove(key);
+        Changed();
+    }
+
+    private void RemovePlatform(string platform)
+    {
+        _platforms.Remove(platform);
+        Changed();
+    }
+
+    private void RemoveRuntime(string runtime)
+    {
+        _runtimes.Remove(runtime);
+        Changed();
+    }
+
+    private void ClearAuthor()
+    {
+        _author = "";
+        Changed();
+    }
+
+    private void OnSortChanged(ChangeEventArgs args)
+    {
+        _sort = args.Value?.ToString() ?? "updated";
+        _sortPinned = true;
+        Changed();
+    }
+
+    private void SetView(string view)
+    {
+        _view = view;
+        Apply();
+        Navigate(replace: true);
+    }
+
+    private void SetGridView() => SetView("grid");
+
+    private void SetListView() => SetView("list");
+
+    private void ResetUpdated() => SetUpdated("any");
+
+    private void ClearAll()
+    {
+        _systems.Clear();
+        _platforms.Clear();
+        _runtimes.Clear();
+        _updated = "any";
+        _deps = false;
+        _hidden = false;
+        _author = "";
+        _query = "";
+        _sort = "updated";
+        _sortPinned = false;
+        _page = 1;
+        Apply();
+        Navigate(replace: false);
+    }
+
+    private void Changed()
+    {
+        _page = 1;
+        Apply();
+        Navigate(replace: false);
+    }
+
+    private async Task GoToPage(int page)
+    {
+        _page = Math.Clamp(page, 1, _result.PageCount);
+        Apply();
+        Navigate(replace: false);
+        StateHasChanged();
+        await Task.Delay(30);
+        try
+        {
+            await JS.InvokeVoidAsync("qmScrollToResults");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The circuit went away; nothing left to scroll.
+        }
+    }
+
+    private void Navigate(bool replace)
+    {
+        _lastParamQuery = _query;
+        string url = BuildUrl();
+        Navigation.NavigateTo(url, replace: replace);
+    }
+
+    private string BuildUrl()
+    {
+        var parameters = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_query))
+            parameters.Add("q=" + Uri.EscapeDataString(_query.Trim()));
+
+        if (_systems.Count > 0)
+            parameters.Add("systems=" + string.Join(',', _systems.OrderBy(s => s)));
+
+        if (_platforms.Count > 0)
+            parameters.Add("platforms=" + string.Join(',', _platforms.OrderBy(p => p)));
+
+        if (_runtimes.Count > 0)
+            parameters.Add("runtimes=" + string.Join(',', _runtimes.OrderBy(r => r)));
+
+        string defaultSort = string.IsNullOrWhiteSpace(_query) ? "updated" : "relevance";
+        if (!string.Equals(_sort, defaultSort, StringComparison.OrdinalIgnoreCase))
+            parameters.Add("sort=" + _sort);
+
+        if (_updated != "any")
+            parameters.Add("updated=" + _updated);
+
+        if (_deps)
+            parameters.Add("deps=1");
+
+        if (_hidden)
+            parameters.Add("hidden=1");
+
+        if (_view == "list")
+            parameters.Add("view=list");
+
+        if (_page > 1)
+            parameters.Add("page=" + _page);
+
+        if (!string.IsNullOrWhiteSpace(_author))
+            parameters.Add("author=" + Uri.EscapeDataString(_author));
+
+        return "/plugins" + (parameters.Count > 0 ? "?" + string.Join('&', parameters) : "");
+    }
+
+    private int CountFor(string facet, string key)
+    {
+        Dictionary<string, int> counts = facet switch
+        {
+            "systems" => _result.SystemCounts,
+            "platforms" => _result.PlatformCounts,
+            "runtimes" => _result.RuntimeCounts,
+            _ => []
+        };
+
+        return counts.GetValueOrDefault(key);
+    }
+
+    private string SystemName(string key) =>
+        Options.Value.Hubs.FirstOrDefault(h => string.Equals(h.Key, key, StringComparison.OrdinalIgnoreCase))?.Name
+        ?? key;
+
+    private static IEnumerable<string> Split(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? []
+            : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    public void Dispose()
+    {
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+    }
+}

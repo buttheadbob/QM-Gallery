@@ -1,0 +1,35 @@
+@using Microsoft.Extensions.Options
+@inject GalleryStore Store
+@inject IOptions<GalleryOptions> Options
+
+<footer class="site-footer">
+    <div class="container footer-inner">
+        <div class="footer-brand">
+            <span class="brand-mark brand-mark-small" aria-hidden="true">
+                <svg viewBox="0 0 32 32" fill="none">
+                    <rect x="1" y="1" width="30" height="30" rx="8" fill="currentColor" opacity="0.1"/>
+                    <path d="M9 10.5h14M9 16h14M9 21.5h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+                    <circle cx="22" cy="21.5" r="2.2" fill="currentColor"/>
+                </svg>
+            </span>
+            <div>
+                <strong>QM Gallery</strong>
+                <p>Every plugin for Pulsar, Magnetar and Quasar in one place.</p>
+            </div>
+        </div>
+
+        <nav class="footer-links" aria-label="Footer">
+            <a href="/plugins">Plugins</a>
+            <a href="/mods">Mods</a>
+            <a href="/authors">Authors</a>
+            <a href="/about">About</a>
+            <a href="/status">Status</a>
+            <a href="@Options.Value.DiscordUrl" target="_blank" rel="noopener noreferrer">Discord</a>
+        </nav>
+
+        <p class="footer-note">
+            Community-maintained and unaffiliated with Keen Software House.
+            Catalogue refreshed @Text.RelativeTime(Store.View.Snapshot.LastManifestRefresh).
+        </p>
+    </div>
+</footer>

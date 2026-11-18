@@ -1,0 +1,162 @@
+@page "/status"
+@inject GalleryStore Store
+@inject GitHubClient GitHub
+
+<PageTitle>Status · QM Gallery</PageTitle>
+
+@{
+    GalleryView view = Store.View;
+    GallerySnapshot snapshot = view.Snapshot;
+    int authors = view.Plugins.Select(p => p.Author).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+    int readmeFiles = 0;
+    long snapshotBytes = 0;
+
+    try
+    {
+        readmeFiles = Directory.GetFiles(Store.Paths.ReadmesDirectory, "*.md").Length;
+        if (File.Exists(Store.Paths.SnapshotFile))
+            snapshotBytes = new FileInfo(Store.Paths.SnapshotFile).Length;
+    }
+    catch
+    {
+        // Status is best effort.
+    }
+}
+
+<div class="container">
+    <PageHead Title="Status"
+              Description="How fresh the catalogue is and where each piece of data comes from. No secrets are shown."/>
+
+    <div class="status-grid">
+        <div class="status-card">
+            <strong>@Text.Number(view.Plugins.Count(p => !p.IsHidden))</strong>
+            <span>visible plugins</span>
+        </div>
+        <div class="status-card">
+            <strong>@Text.Number(view.Mods.Count(m => !m.Hidden))</strong>
+            <span>mods</span>
+        </div>
+        <div class="status-card">
+            <strong>@Text.Number(authors)</strong>
+            <span>authors</span>
+        </div>
+        <div class="status-card">
+            <strong>@Text.RelativeTime(snapshot.LastManifestRefresh)</strong>
+            <span>hub refresh</span>
+        </div>
+    </div>
+
+    <div class="table-card" style="margin-bottom: 24px;">
+        <table class="status-table">
+            <thead>
+            <tr>
+                <th>Hub</th>
+                <th>Repository</th>
+                <th>Descriptors</th>
+                <th>Fetched</th>
+                <th>State</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (HubStatus hub in snapshot.Hubs)
+            {
+                <tr>
+                    <td><span class="system-badge system-@hub.Key">@hub.Name</span></td>
+                    <td><a href="https://github.com/@hub.Repo" target="_blank" rel="noopener noreferrer">@hub.Repo</a></td>
+                    <td>@Text.Number(hub.PluginCount) plugins · @Text.Number(hub.ModCount) mods</td>
+                    <td>@Text.RelativeTime(hub.FetchedAt)</td>
+                    <td>
+                        @if (hub.Error is null)
+                        {
+                            <span class="badge badge-green">OK</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-warn">Cached</span>
+                        }
+                    </td>
+                </tr>
+            }
+            @if (snapshot.Hubs.Count == 0)
+            {
+                <tr>
+                    <td colspan="5" class="muted">No hub refresh has completed yet.</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="table-card">
+        <table class="status-table">
+            <thead>
+            <tr>
+                <th>Data</th>
+                <th>Source</th>
+                <th>State</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+                <td>Pulsar ratings and usage</td>
+                <td><a href="https://pluginstats.ferenczi.eu/Stats" target="_blank" rel="noopener noreferrer">pluginstats.ferenczi.eu</a></td>
+                <td>@Text.Number(snapshot.PulsarStats.Count) entries · refreshed @Text.RelativeTime(snapshot.LastStatsRefresh)</td>
+            </tr>
+            <tr>
+                <td>Magnetar usage</td>
+                <td><a href="https://magnetarstats.ferenczi.eu/Stats" target="_blank" rel="noopener noreferrer">magnetarstats.ferenczi.eu</a></td>
+                <td>@Text.Number(snapshot.MagnetarStats.Count) entries</td>
+            </tr>
+            <tr>
+                <td>GitHub metadata</td>
+                <td>GitHub REST API</td>
+                <td>
+                    @if (GitHub.TokenConfigured && !GitHub.TokenInvalid)
+                    {
+                        <span class="badge badge-green">Token configured</span>
+                        @if (GitHub.Remaining is int remaining)
+                        {
+                            <span class="muted">@Text.Number(remaining) calls remaining</span>
+                        }
+                    }
+                    else if (GitHub.TokenInvalid)
+                    {
+                        <span class="badge badge-warn">Token rejected — running anonymously</span>
+                    }
+                    else
+                    {
+                        <span class="badge">No token — stars and licences hidden</span>
+                    }
+                </td>
+            </tr>
+            <tr>
+                <td>README cache</td>
+                <td>Pinned commits</td>
+                <td>@Text.Number(readmeFiles) documents</td>
+            </tr>
+            <tr>
+                <td>Snapshot</td>
+                <td>Local disk</td>
+                <td>@((snapshotBytes / 1024d).ToString("0")) KB · schema @snapshot.SchemaVersion</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    @if (snapshot.Warnings.Count > 0)
+    {
+        <div class="meta-card" style="margin-top: 24px;">
+            <h3>Descriptor warnings</h3>
+            <ul class="muted" style="margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.8;">
+                @foreach (string warning in snapshot.Warnings.Take(20))
+                {
+                    <li>@warning</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <p class="subtle" style="margin: 24px 0 48px; font-size: 12px;">
+        The catalogue refreshes automatically every 30 minutes. There is no admin area and nothing on this page can modify data.
+    </p>
+</div>

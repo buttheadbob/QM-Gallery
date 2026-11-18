@@ -1,0 +1,13 @@
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? PageTitle { get; set; }
+}
+
+<header class="page-head" data-page-title="@PageTitle">
+    <h1>@Title</h1>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <p>@Description</p>
+    }
+</header>

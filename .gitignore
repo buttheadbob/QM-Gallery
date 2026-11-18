@@ -1,0 +1,49 @@
+# Build output
+bin/
+obj/
+out/
+artifacts/
+publish/
+/packages/
+*.nupkg
+*.binlog
+
+# Test output
+TestResults/
+*.trx
+*.coverage
+coverage*
+
+# IDE and editor files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.iml
+riderModule.iml
+_ReSharper.Caches/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Local runtime data (catalogue snapshot, README cache)
+App_Data/
+*.log
+*.tmp
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+secrets/
+*.local.json
+
+# Local Compose overrides
+docker-compose.override.yml
+compose.override.yaml

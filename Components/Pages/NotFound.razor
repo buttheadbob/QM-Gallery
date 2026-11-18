@@ -1,0 +1,21 @@
+﻿@page "/not-found"
+
+<PageTitle>Page not found · QM Gallery</PageTitle>
+
+<div class="container">
+    <div class="empty-state" style="margin-top: 64px;" data-page-title="Page not found">
+        <span class="empty-icon"><Icon Name="search" Size="24"/></span>
+        <h2>Page not found</h2>
+        <p>The page you were looking for doesn't exist. Try the catalogue or search for a plugin.</p>
+        <form method="get" action="/plugins" class="hero-search" style="margin-top: 22px;">
+            <div class="search-field">
+                <Icon Name="search" Size="17"/>
+                <input class="input" type="search" name="q" placeholder="Search plugins…" aria-label="Search plugins"/>
+            </div>
+        </form>
+        <div class="empty-actions">
+            <a class="btn btn-primary" href="/plugins">Browse plugins</a>
+            <a class="btn btn-secondary" href="/">Home</a>
+        </div>
+    </div>
+</div>

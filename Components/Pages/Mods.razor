@@ -1,0 +1,139 @@
+@page "/mods"
+@using Microsoft.Extensions.Options
+@inject GalleryStore Store
+@inject IOptions<GalleryOptions> Options
+
+<PageTitle>Mods · QM Gallery</PageTitle>
+
+@{
+    GalleryView view = Store.View;
+    List<ModEntry> all = view.Mods.ToList();
+    string query = Q ?? "";
+    bool hidden = string.Equals(Hidden, "1", StringComparison.Ordinal);
+    string sort = Sort switch
+    {
+        "name" or "rating" or "votes" => Sort,
+        _ => "players"
+    };
+    string author = Author ?? "";
+    var request = new ModsRequest
+    {
+        Q = query,
+        Sort = sort,
+        Hidden = hidden,
+        Author = author,
+        Page = Math.Max(1, Page)
+    };
+    ModsResult result = CatalogQueryEngine.QueryMods(all, request);
+    int authorCount = all.Select(m => m.Author).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+    string Link(int page)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(query)) parts.Add("q=" + Uri.EscapeDataString(query));
+        if (!string.IsNullOrWhiteSpace(author)) parts.Add("author=" + Uri.EscapeDataString(author));
+        if (sort != "players") parts.Add("sort=" + sort);
+        if (hidden) parts.Add("hidden=1");
+        if (page > 1) parts.Add("page=" + page);
+        return "/mods" + (parts.Count > 0 ? "?" + string.Join('&', parts) : "");
+    }
+}
+
+<div class="container">
+    <PageHead Title="Mods"
+              Description="Client-side Workshop mods registered with the Pulsar hub. These are game mods rather than plugins — they load through Space Engineers' own Workshop system, with Pulsar handling the registration."/>
+
+    <div class="catalog-toolbar">
+        <form method="get" action="/mods" style="display: contents;">
+            <div class="search-field" style="flex: 1; min-width: 220px;">
+                <Icon Name="search" Size="17"/>
+                <input class="input" type="search" name="q" value="@query" placeholder="Search mods or authors…" aria-label="Search mods"/>
+            </div>
+            <select class="select" name="sort" aria-label="Sort mods">
+                <option value="players" selected='@(sort == "players")'>Most used</option>
+                <option value="rating" selected='@(sort == "rating")'>Top rated</option>
+                <option value="votes" selected='@(sort == "votes")'>Most votes</option>
+                <option value="name" selected='@(sort == "name")'>Name A–Z</option>
+            </select>
+            <label class="filter-option" style="height: 42px; white-space: nowrap;">
+                <input type="checkbox" name="hidden" value="1" checked="@hidden"/>
+                <span>Show hidden</span>
+            </label>
+            @if (!string.IsNullOrWhiteSpace(author))
+            {
+                <input type="hidden" name="author" value="@author"/>
+            }
+            <button class="btn btn-secondary" type="submit">Search</button>
+        </form>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(author))
+    {
+        <div class="active-filters">
+            <a class="chip chip-active" href="@Link(1)">
+                Author: @author
+                <Icon Name="x" Size="12"/>
+            </a>
+        </div>
+    }
+
+    <div class="result-bar" id="results">
+        <span><strong>@Text.Number(result.Total)</strong> @(result.Total == 1 ? "mod" : "mods") · @Text.Number(authorCount) authors</span>
+        @if (result.Total > 0)
+        {
+            <span>Showing @((result.Page - 1) * 48 + 1)–@Math.Min(result.Page * 48, result.Total)</span>
+        }
+    </div>
+
+    @if (result.Items.Count == 0)
+    {
+        <EmptyState Icon="search"
+                    Title="No mods match"
+                    Message="Try a shorter search or clear the author filter.">
+            <a class="btn btn-primary" href="/mods">Clear filters</a>
+        </EmptyState>
+    }
+    else
+    {
+        <div class="plugin-grid">
+            @foreach (ModEntry mod in result.Items)
+            {
+                <ModCard Mod="@mod"/>
+            }
+        </div>
+    }
+
+    @if (result.PageCount > 1)
+    {
+        <nav class="pagination" aria-label="Pagination">
+            <a class="btn btn-secondary btn-sm @(result.Page <= 1 ? "disabled" : "")" href="@Link(result.Page - 1)">
+                <Icon Name="chevron-left" Size="15"/> Previous
+            </a>
+            <span class="pagination-info">Page @result.Page of @result.PageCount</span>
+            <a class="btn btn-secondary btn-sm" href="@Link(result.Page + 1)">
+                Next <Icon Name="chevron-right" Size="15"/>
+            </a>
+        </nav>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+    [SupplyParameterFromQuery(Name = "hidden")] public string? Hidden { get; set; }
+    [SupplyParameterFromQuery(Name = "author")] public string? Author { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int Page { get; set; } = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await Store.EnsureReadyAsync(timeout.Token);
+        }
+        catch
+        {
+            // The layout and empty state handle an unavailable catalogue.
+        }
+    }
+}

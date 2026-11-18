@@ -1,0 +1,8 @@
+@code {
+    [Parameter, EditorRequired] public PluginGroup Plugin { get; set; } = default!;
+}
+
+<a class="chip" href="/plugins/@Plugin.Slug">
+    <Avatar Name="@Plugin.Author" Seed="@(Plugin.RepoOwner ?? Plugin.Author)" Owner="@Plugin.RepoOwner" Size="sm"/>
+    @Plugin.Name
+</a>
